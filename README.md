@@ -36,8 +36,7 @@ Or, to run locally (without moving):
 ```
 
 
-**Arguments:**
-- `JOB_LIST_FILE`: Path to a text file containing paths to your job scripts (one per line).
+- `JOB_LIST_FILE`: Path to a text file containing **absolute paths** to your job scripts (one per line).
 - `-q MAX_QUEUE`: Number of jobs to have running/queued at once. **Default:** 3
 - `-l LOG_FILE`: (optional) Log file path; if omitted, logs print only to stdout.
 
@@ -45,10 +44,10 @@ Or, to run locally (without moving):
 
 Suppose you have a file `jobs.txt`:
 ```
-mysim1.sh
-mysim2.sh
-mysim3.sh
-mysim4.sh
+    /absolute/path/to/mysim1.sh
+    /absolute/path/to/mysim2.sh
+    /absolute/path/to/mysim3.sh
+    /absolute/path/to/mysim4.sh
 ```
 And you want at most 2 jobs running at a time, while logging to both stdout and `runlog.txt`:
 
@@ -86,6 +85,7 @@ The log shows job script, job ID, and status each time it changes.
 ## Notes
 - Requires working `sbatch`, `squeue`, and `sacct` commands in your environment.
 - Only Slurm job scripts (`.sh` files, typically) should be listed in the input list.
+- **Important:** The job list file should contain absolute paths to scripts. This avoids issues with changing working directories or running the tool from different locations.
 - If a job fails to submit, this will also be logged.
 # CIAI-Wrangler
 
