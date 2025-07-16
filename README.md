@@ -2,6 +2,9 @@
 
 CIAI-Wrangler is a simple Python CLI tool to orchestrate and monitor the submission of batch job scripts to an HPC Slurm cluster. It ensures that a user-defined number of jobs run concurrently and logs the status of each job (queued, running, completed, failed).
 
+> **Disclaimer:**
+> This is an experimental tool for orchestrating SLURM jobs. Use at your own risk—no guarantees! If your job pipeline fails hours before your paper deadline, please don't @ me.
+
 ## Features
 - Submits jobs from a list, limiting the maximum number of concurrent jobs (`-q`)
 - Automatically starts new jobs as others complete
@@ -87,7 +90,3 @@ The log shows job script, job ID, and status each time it changes.
 - Only Slurm job scripts (`.sh` files, typically) should be listed in the input list.
 - **Important:** The job list file should contain absolute paths to scripts. This avoids issues with changing working directories or running the tool from different locations.
 - If a job fails to submit, this will also be logged.
-# CIAI-Wrangler
-
-> **Disclaimer:**
-> This is an experimental tool for orchestrating SLURM jobs. Use at your own risk—no guarantees! If your job pipeline fails hours before your paper deadline, please don't @ me.
