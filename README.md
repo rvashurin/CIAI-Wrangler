@@ -18,6 +18,7 @@ No installation needed. Copy `ciai_wrangler.py` to your cluster login node.
 ## Usage
 
 ### To install for global use:
+
 1. Move the `ciai_wrangler` script to a directory in your `PATH`, e.g.:
    ```sh
    mv ciai_wrangler ~/bin/
@@ -26,17 +27,18 @@ No installation needed. Copy `ciai_wrangler.py` to your cluster login node.
    ```
 2. Now you can invoke it from anywhere as:
    ```sh
-   ciai_wrangler JOB_LIST_FILE -q MAX_QUEUE [-l LOG_FILE]
+   ciai_wrangler JOB_LIST_FILE [-q MAX_QUEUE] [-l LOG_FILE]
    ```
 
 Or, to run locally (without moving):
 ```sh
-./ciai_wrangler JOB_LIST_FILE -q MAX_QUEUE [-l LOG_FILE]
+./ciai_wrangler JOB_LIST_FILE [-q MAX_QUEUE] [-l LOG_FILE]
 ```
+
 
 **Arguments:**
 - `JOB_LIST_FILE`: Path to a text file containing paths to your job scripts (one per line).
-- `-q MAX_QUEUE`: Number of jobs to have running/queued at once.
+- `-q MAX_QUEUE`: Number of jobs to have running/queued at once. **Default:** 3
 - `-l LOG_FILE`: (optional) Log file path; if omitted, logs print only to stdout.
 
 **Example:**
@@ -51,8 +53,15 @@ mysim4.sh
 And you want at most 2 jobs running at a time, while logging to both stdout and `runlog.txt`:
 
 
+
 ```sh
 ciai_wrangler jobs.txt -q 2 -l runlog.txt
+```
+
+If you omit `-q`, the default is 3 concurrent jobs:
+
+```sh
+ciai_wrangler jobs.txt
 ```
 
 Typical output:
@@ -78,3 +87,7 @@ The log shows job script, job ID, and status each time it changes.
 - Requires working `sbatch`, `squeue`, and `sacct` commands in your environment.
 - Only Slurm job scripts (`.sh` files, typically) should be listed in the input list.
 - If a job fails to submit, this will also be logged.
+# CIAI-Wrangler
+
+> **Disclaimer:**
+> This is an experimental tool for orchestrating SLURM jobs. Use at your own risk—no guarantees! If your job pipeline fails hours before your paper deadline, please don't @ me.

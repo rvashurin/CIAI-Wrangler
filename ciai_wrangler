@@ -7,7 +7,7 @@ import sys
 def parse_args():
     parser = argparse.ArgumentParser(description="CIAI-Wrangler: Slurm Job Orchestration Tool")
     parser.add_argument("job_file", help="Text file containing paths to job scripts, one per line.")
-    parser.add_argument("-q", type=int, required=True, help="Maximum concurrent (queued) jobs.")
+    parser.add_argument("-q", type=int, default=3, help="Maximum concurrent (queued) jobs. Default: 3")
     parser.add_argument("-l", type=str, default=None, help="Log file path (optional).")
     return parser.parse_args()
 
@@ -25,9 +25,12 @@ class Logger:
             self.f = None
 
     def log(self, msg):
-        print(msg)
+        from datetime import datetime
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        line = f"[{ts}] {msg}"
+        print(line)
         if self.f:
-            self.f.write(msg+'\n')
+            self.f.write(line+'\n')
             self.f.flush()
 
     def close(self):
