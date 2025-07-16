@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+import argparse
+import subprocess
+import time
+import sys
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="CIAI-Wrangler: Slurm Job Orchestration Tool")
+    parser.add_argument("job_file", help="Text file containing paths to job scripts, one per line.")
+    parser.add_argument("-q", type=int, required=True, help="Maximum concurrent (queued) jobs.")
+    parser.add_argument("-l", type=str, default=None, help="Log file path (optional).")
+    return parser.parse_args()
+
+def read_job_scripts(job_file):
+    with open(job_file) as f:
+        jobs = [line.strip() for line in f if line.strip()]
+    return jobs
+
+class Logger:
+    def __init__(self, logfile=None):
+        self.logfile = logfile
+        if logfile:
+            self.f = open(logfile, 'w')
+        else:
+            self.f = None
+
+    def log(self, msg):
+        print(msg)
+        if self.f:
+            self.f.write(msg+'\n')
+            self.f.flush()
+
+    def close(self):
+        if self.f:
+            self.f.close()
+
+def submit_job(script):
+    try:
+        result = subprocess.run(["sbatch", script], capture_output=True, text=True)
+        if result.returncode != 0:
+            return None, result.stderr.strip()
+        # Output like: "Submitted batch job 12345"
+        for line in result.stdout.strip().splitlines():
+            if line.startswith("Submitted batch job"):
+                jobid = line.strip().split()[-1]
+                return jobid, None
+        return None, "Unrecognized sbatch output: " + result.stdout
+    except Exception as e:
+        return None, str(e)
+
+def check_job_status(jobid):
+    # Returns: 'queued', 'running', 'completed', 'failed'
+    # Check detailed state using squeue first
+    squeue = subprocess.run([
+        "squeue", "-j", str(jobid), "-h", "-o", "%T"
+    ], capture_output=True, text=True)
+    if squeue.returncode == 0:
+        state = squeue.stdout.strip().split()  # can be multiple lines, use first
+        if state:
+            sq_state = state[0].upper()
+            if sq_state == "PENDING":
+                return "queued"
+            elif sq_state == "RUNNING":
+                return "running"
+            # Sometimes CG (completing), etc., but re-check with sacct for terminal
+    # Check sacct for terminal status
+    res = subprocess.run([
+        "sacct", "-j", str(jobid), "-o", "State", "-n"
+    ], capture_output=True, text=True)
+    if res.returncode == 0:
+        output = [l for l in res.stdout.strip().split() if l]
+        if output:
+            state = output[-1].upper()
+            if state.startswith("COMPL"):
+                return "completed"
+            elif (state.startswith("FAILED") or state.startswith("CANCELLED") or
+                  state.startswith("TIMEOUT") or state.startswith("NODE_FAIL") or
+                  state.startswith("OUT_OF_MEMORY")):
+                return "failed"
+            else:
+                # Some terminal states could be "PREEMPTED", "BOOT_FAIL" etc.; treat these as failed
+                FAILED_STATES = ["PREEMPTED", "BOOT_FAIL", "DEADLINE"]
+                if any(state.startswith(fs) for fs in FAILED_STATES):
+                    return "failed"
+                return "completed"  # fallback, treat other states as completed
+    return None  # Can't determine
+
+def main():
+    args = parse_args()
+    jobs = read_job_scripts(args.job_file)
+    log = Logger(args.l)
+
+    running_jobs = []  # list of (jobid, script)
+    to_submit = list(jobs)
+    jobid_to_script = {}
+    job_last_status = {}
+
+    # Start up to -q jobs
+    while to_submit and len(running_jobs) < args.q:
+        script = to_submit.pop(0)
+        jobid, err = submit_job(script)
+        if jobid:
+            jobid_to_script[jobid] = script
+            log.log(f"Job {script} started with ID {jobid} (queued)")
+            running_jobs.append((jobid, script))
+            job_last_status[jobid] = "queued"
+        else:
+            log.log(f"Job {script} failed to submit: {err}")
+
+    finished_jobs = set()
+
+    while running_jobs or to_submit:
+        time.sleep(5)
+        still_running = []
+        for jobid, script in running_jobs:
+            status = check_job_status(jobid)
+            prev_status = job_last_status.get(jobid)
+            # Only log a state when changed (except for completion/fail)
+            if status in ("queued", "running"):
+                if status != prev_status:
+                    log.log(f"Job {script} with ID {jobid} {status}")
+                still_running.append((jobid, script))
+                job_last_status[jobid] = status
+            elif status in ("completed", "failed"):
+                log.log(f"Job {script} with ID {jobid} {status}")
+                finished_jobs.add(jobid)
+                job_last_status[jobid] = status
+                # Start next if any remain
+                if to_submit:
+                    next_script = to_submit.pop(0)
+                    next_jobid, err = submit_job(next_script)
+                    if next_jobid:
+                        jobid_to_script[next_jobid] = next_script
+                        log.log(f"Job {next_script} started with ID {next_jobid} (queued)")
+                        still_running.append((next_jobid, next_script))
+                        job_last_status[next_jobid] = "queued"
+                    else:
+                        log.log(f"Job {next_script} failed to submit: {err}")
+            else:
+                # If status is None, recheck later
+                still_running.append((jobid, script))
+        running_jobs = still_running
+
+    log.close()
+
+if __name__ == "__main__":
+    main()

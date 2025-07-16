@@ -1,0 +1,11 @@
+The app is called CIAI-Wrangler. It orcherstrates job submissions to a Slurm cluster.
+
+It is written in Python. It works as a CLI tool. When invoked, it accepts a text file with paths to job sctipts to be run.
+
+It also accepts CLI parameter -q that defines maximum queue size for a given cluster.
+
+For -q 3 it submits 3 jobs immedately and then monitors their status every 5 seconds. When one of the jobs finishes or fails it submits the next job from the list, until all jobs are submitted.
+
+It writes a log file with the status of each job, including its ID and status (started, finished, failed). Log file path and name can be specified with the -l parameter.
+
+The log is also printed to the stdout.
