@@ -16,13 +16,13 @@ CIAI-Wrangler is a simple Python CLI tool to orchestrate and monitor the submiss
 - Access to Slurm CLI tools (`sbatch`, `squeue`, `sacct`)
 
 ## Installation
-No installation needed. Copy `ciai_wrangler.py` to your cluster login node.
+No installation needed. Copy `ciai_wrangler` to your cluster login node.
 
 ## Usage
 
 ### To install for global use:
 
-1. Move the `ciai_wrangler` script to a directory in your `PATH`, e.g.:
+1. Move the `ciai_wrangler` script (no `.py` extension) to a directory in your `PATH`, e.g.:
    ```sh
    mv ciai_wrangler ~/bin/
    chmod +x ~/bin/ciai_wrangler
@@ -68,22 +68,22 @@ ciai_wrangler jobs.txt
 
 Typical output:
 ```
-Job mysim1.sh started with ID 12345 (queued)
-Job mysim2.sh started with ID 12346 (queued)
-Job mysim1.sh with ID 12345 running
-Job mysim1.sh with ID 12345 completed
-Job mysim3.sh started with ID 12347 (queued)
+[[36m2024-07-16 19:06:42[0m] Job /absolute/path/to/mysim1.sh started with ID 12345 (queued)
+[[36m2024-07-16 19:06:42[0m] Job /absolute/path/to/mysim2.sh started with ID 12346 (queued)
+[[36m2024-07-16 19:06:46[0m] Job /absolute/path/to/mysim1.sh with ID 12345 running
+[[36m2024-07-16 19:10:51[0m] Job /absolute/path/to/mysim1.sh with ID 12345 completed
+[[36m2024-07-16 19:10:51[0m] Job /absolute/path/to/mysim3.sh started with ID 12347 (queued)
 ...
-Job mysim3.sh with ID 12347 failed
 ```
 
-The log shows job script, job ID, and status each time it changes.
+**IMPORTANT: Due to current cluster issues, jobs that disappear from the queue are always marked as "completed" in the log, whether they succeeded or failed. You will not see a "failed" log entry. You must verify success/failure through other means if needed.**
+
+The log shows job script, job ID, and status, each time it changes, with a timestamp.
 
 ## Job Statuses
 - **queued:** The job is in the Slurm queue (waiting to run)
 - **running:** The job is running on compute resources
-- **completed:** The job finished successfully (Slurm state COMPLETED)
-- **failed:** The job failed, was cancelled, timed out, or killed
+- **completed:** The job left the queue; due to current cluster conditions, this status is used for any job removed from the queue, regardless of whether it succeeded or failed.
 
 ## Notes
 - Requires working `sbatch`, `squeue`, and `sacct` commands in your environment.

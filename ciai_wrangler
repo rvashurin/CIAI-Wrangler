@@ -51,42 +51,24 @@ def submit_job(script):
     except Exception as e:
         return None, str(e)
 
+
+# ---
+# WARNING: DISABLED sacct polling due to SLURM issues. Only squeue is used. If a job id is missing in squeue, we assume completion (success or failure undetermined).
 def check_job_status(jobid):
-    # Returns: 'queued', 'running', 'completed', 'failed'
-    # Check detailed state using squeue first
+    # Returns: 'queued', 'running', 'completed' (cannot distinguish failed/completed)
     squeue = subprocess.run([
         "squeue", "-j", str(jobid), "-h", "-o", "%T"
     ], capture_output=True, text=True)
     if squeue.returncode == 0:
-        state = squeue.stdout.strip().split()  # can be multiple lines, use first
+        state = squeue.stdout.strip().split()
         if state:
             sq_state = state[0].upper()
             if sq_state == "PENDING":
                 return "queued"
             elif sq_state == "RUNNING":
                 return "running"
-            # Sometimes CG (completing), etc., but re-check with sacct for terminal
-    # Check sacct for terminal status
-    res = subprocess.run([
-        "sacct", "-j", str(jobid), "-o", "State", "-n"
-    ], capture_output=True, text=True)
-    if res.returncode == 0:
-        output = [l for l in res.stdout.strip().split() if l]
-        if output:
-            state = output[-1].upper()
-            if state.startswith("COMPL"):
-                return "completed"
-            elif (state.startswith("FAILED") or state.startswith("CANCELLED") or
-                  state.startswith("TIMEOUT") or state.startswith("NODE_FAIL") or
-                  state.startswith("OUT_OF_MEMORY")):
-                return "failed"
-            else:
-                # Some terminal states could be "PREEMPTED", "BOOT_FAIL" etc.; treat these as failed
-                FAILED_STATES = ["PREEMPTED", "BOOT_FAIL", "DEADLINE"]
-                if any(state.startswith(fs) for fs in FAILED_STATES):
-                    return "failed"
-                return "completed"  # fallback, treat other states as completed
-    return None  # Can't determine
+    # If not in squeue, assume it's completed (status unknown)
+    return "completed"
 
 def main():
     args = parse_args()
