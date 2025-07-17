@@ -70,6 +70,36 @@ def check_job_status(jobid):
     # If not in squeue, assume it's completed (status unknown)
     return "completed"
 
+def cluster_health_check(log):
+    import shutil
+    required_cmds = ["sbatch", "squeue", "sacct"]
+    log.log("Performing cluster health check...")
+    all_ok = True
+    for cmd in required_cmds:
+        path = shutil.which(cmd)
+        if path:
+            log.log(f"{cmd} OK")
+        else:
+            log.log(f"{cmd} FAIL: '{cmd}' not found in PATH. Please ensure Slurm CLI tools are installed and accessible.")
+            all_ok = False
+
+    # Advanced check: sacct basic call (to check if slurmdbd is accessible)
+    #import subprocess
+    #sacct_path = shutil.which("sacct")
+    #if sacct_path:
+    #    try:
+    #        test = subprocess.run(["sacct", "-n", "-o", "JobID", "-X", "--help"], capture_output=True, text=True)
+    #        # try a simple call that would not require job history but hit the DBD
+    #        test2 = subprocess.run(["sacct", "-n", "-o", "JobID", "-X", "-S", "now-1hour"], capture_output=True, text=True)
+    #        if test2.returncode != 0:
+    #            msg = test2.stderr.strip() or 'Unknown error'
+    #            log.log(f"sacct FAIL: sacct command is present but does not work correctly: {msg}")
+    #            all_ok = False
+    #    except Exception as e:
+    #        log.log(f"sacct FAIL: exception when running sacct: {str(e)}")
+    #        all_ok = False
+    return all_ok
+
 def main():
     args = parse_args()
     jobs = read_job_scripts(args.job_file)
@@ -130,35 +160,6 @@ def main():
                 # If status is None, recheck later
                 still_running.append((jobid, script))
         running_jobs = still_running
-def cluster_health_check(log):
-    import shutil
-    required_cmds = ["sbatch", "squeue", "sacct"]
-    log.log("Performing cluster health check...")
-    all_ok = True
-    for cmd in required_cmds:
-        path = shutil.which(cmd)
-        if path:
-            log.log(f"{cmd} OK")
-        else:
-            log.log(f"{cmd} FAIL: '{cmd}' not found in PATH. Please ensure Slurm CLI tools are installed and accessible.")
-            all_ok = False
-
-    # Advanced check: sacct basic call (to check if slurmdbd is accessible)
-    import subprocess
-    sacct_path = shutil.which("sacct")
-    if sacct_path:
-        try:
-            test = subprocess.run(["sacct", "-n", "-o", "JobID", "-X", "--help"], capture_output=True, text=True)
-            # try a simple call that would not require job history but hit the DBD
-            test2 = subprocess.run(["sacct", "-n", "-o", "JobID", "-X", "-S", "now-1hour"], capture_output=True, text=True)
-            if test2.returncode != 0:
-                msg = test2.stderr.strip() or 'Unknown error'
-                log.log(f"sacct FAIL: sacct command is present but does not work correctly: {msg}")
-                all_ok = False
-        except Exception as e:
-            log.log(f"sacct FAIL: exception when running sacct: {str(e)}")
-            all_ok = False
-    return all_ok
 
     log.close()
 
