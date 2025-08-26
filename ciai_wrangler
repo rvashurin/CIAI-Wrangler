@@ -72,7 +72,8 @@ def check_job_status(jobid):
 
 def cluster_health_check(log):
     import shutil
-    required_cmds = ["sbatch", "squeue", "sacct"]
+    #required_cmds = ["sbatch", "squeue", "sacct"]
+    required_cmds = ["sbatch", "squeue"]
     log.log("Performing cluster health check...")
     all_ok = True
     for cmd in required_cmds:
