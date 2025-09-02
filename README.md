@@ -6,14 +6,15 @@ CIAI-Wrangler is a simple Python CLI tool to orchestrate and monitor the submiss
 > This is an experimental tool for orchestrating SLURM jobs. Use at your own risk—no guarantees! If your job pipeline fails hours before your paper deadline, please don't @ me.
 
 ## Features
-- Submits jobs from a list, limiting the maximum number of concurrent jobs (`-q`)
+- Submits jobs from a YAML config list, limiting the maximum number of concurrent jobs (`max_queue`)
 - Automatically starts new jobs as others complete
 - Polls job status every 5 seconds
 - Logs status (to stdout and optionally a file): job script, job ID, and real-time state
 
 ## Requirements
 - Python 3.7+
-- Access to Slurm CLI tools (`sbatch`, `squeue`, `sacct`)
+- PyYAML (`pip install pyyaml`)
+- Access to Slurm CLI tools (`sbatch`, `squeue`)
 
 ## Installation
 No installation needed. Copy `ciai_wrangler` to your cluster login node.
@@ -30,40 +31,51 @@ No installation needed. Copy `ciai_wrangler` to your cluster login node.
    ```
 2. Now you can invoke it from anywhere as:
    ```sh
-   ciai_wrangler JOB_LIST_FILE [-q MAX_QUEUE] [-l LOG_FILE]
+   ciai_wrangler CONFIG_YAML
    ```
 
 Or, to run locally (without moving):
 ```sh
-./ciai_wrangler JOB_LIST_FILE [-q MAX_QUEUE] [-l LOG_FILE]
+./ciai_wrangler CONFIG_YAML
 ```
 
 
-- `JOB_LIST_FILE`: Path to a text file containing **absolute paths** to your job scripts (one per line).
-- `-q MAX_QUEUE`: Number of jobs to have running/queued at once. **Default:** 3
-- `-l LOG_FILE`: (optional) Log file path; if omitted, logs print only to stdout.
+- `CONFIG_YAML`: Path to a YAML configuration file.
+
+YAML schema:
+
+```
+jobs:
+  - /absolute/path/to/mysim1.sh
+  - /absolute/path/to/mysim2.sh
+max_queue: 3        # optional, default 3
+log_file: runlog.txt  # optional, default: none (stdout only)
+```
 
 **Example:**
 
-Suppose you have a file `jobs.txt`:
+Suppose you have a file `config.yaml`:
 ```
-    /absolute/path/to/mysim1.sh
-    /absolute/path/to/mysim2.sh
-    /absolute/path/to/mysim3.sh
-    /absolute/path/to/mysim4.sh
+jobs:
+  - /absolute/path/to/mysim1.sh
+  - /absolute/path/to/mysim2.sh
+  - /absolute/path/to/mysim3.sh
+  - /absolute/path/to/mysim4.sh
+max_queue: 2
+log_file: runlog.txt
 ```
 And you want at most 2 jobs running at a time, while logging to both stdout and `runlog.txt`:
 
 
 
 ```sh
-ciai_wrangler jobs.txt -q 2 -l runlog.txt
+ciai_wrangler config.yaml
 ```
 
-If you omit `-q`, the default is 3 concurrent jobs:
+If you omit `max_queue` in the YAML, the default is 3 concurrent jobs:
 
 ```sh
-ciai_wrangler jobs.txt
+ciai_wrangler config.yaml
 ```
 
 Typical output:
@@ -86,7 +98,7 @@ The log shows job script, job ID, and status, each time it changes, with a times
 - **completed:** The job left the queue; due to current cluster conditions, this status is used for any job removed from the queue, regardless of whether it succeeded or failed.
 
 ## Notes
-- Requires working `sbatch`, `squeue`, and `sacct` commands in your environment.
-- Only Slurm job scripts (`.sh` files, typically) should be listed in the input list.
-- **Important:** The job list file should contain absolute paths to scripts. This avoids issues with changing working directories or running the tool from different locations.
+- Requires working `sbatch` and `squeue` commands in your environment.
+- Only Slurm job scripts (`.sh` files, typically) should be listed in `jobs`.
+- **Important:** Prefer absolute paths to scripts. This avoids issues with changing working directories or running the tool from different locations.
 - If a job fails to submit, this will also be logged.

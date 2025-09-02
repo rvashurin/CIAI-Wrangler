@@ -3,12 +3,11 @@ import argparse
 import subprocess
 import time
 import sys
+from typing import Optional, List, Dict, Any
 
 def parse_args():
     parser = argparse.ArgumentParser(description="CIAI-Wrangler: Slurm Job Orchestration Tool")
-    parser.add_argument("job_file", help="Text file containing paths to job scripts, one per line.")
-    parser.add_argument("-q", type=int, default=3, help="Maximum concurrent (queued) jobs. Default: 3")
-    parser.add_argument("-l", type=str, default=None, help="Log file path (optional).")
+    parser.add_argument("config_file", help="YAML configuration file path.")
     return parser.parse_args()
 
 def read_job_scripts(job_file):
@@ -36,6 +35,52 @@ class Logger:
     def close(self):
         if self.f:
             self.f.close()
+
+def load_config(path: str) -> Dict[str, Any]:
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            text = f.read()
+    except Exception as e:
+        print(f"Error: failed to read config file '{path}': {e}", file=sys.stderr)
+        sys.exit(2)
+
+    try:
+        import yaml  # type: ignore
+    except ImportError:
+        print("Error: PyYAML is required. Install with 'pip install pyyaml' and try again.", file=sys.stderr)
+        sys.exit(2)
+
+    try:
+        data = yaml.safe_load(text)
+    except Exception as e:
+        print(f"Error: failed to parse YAML config: {e}", file=sys.stderr)
+        sys.exit(2)
+
+    if not isinstance(data, dict):
+        print("Config error: top-level YAML must be a mapping (dictionary).", file=sys.stderr)
+        sys.exit(2)
+
+    errors: List[str] = []
+    jobs = data.get('jobs')
+    if not isinstance(jobs, list) or not all(isinstance(x, str) and x.strip() for x in jobs):
+        errors.append("Config error: 'jobs' must be a non-empty list of strings.")
+    max_queue = data.get('max_queue', 3)
+    if not isinstance(max_queue, int) or max_queue <= 0:
+        errors.append("Config error: 'max_queue' must be a positive integer.")
+    log_file = data.get('log_file', None)
+    if log_file is not None and not isinstance(log_file, str):
+        errors.append("Config error: 'log_file' must be a string or null.")
+
+    if errors:
+        for err in errors:
+            print(err, file=sys.stderr)
+        sys.exit(2)
+
+    return {
+        'jobs': [str(j).strip() for j in jobs],
+        'max_queue': int(max_queue),
+        'log_file': log_file,
+    }
 
 def submit_job(script):
     try:
@@ -103,8 +148,9 @@ def cluster_health_check(log):
 
 def main():
     args = parse_args()
-    jobs = read_job_scripts(args.job_file)
-    log = Logger(args.l)
+    cfg = load_config(args.config_file)
+    jobs = list(cfg['jobs'])
+    log = Logger(cfg['log_file'])
 
     if not cluster_health_check(log):
         log.log("Cluster health check failed. Exiting.")
@@ -117,7 +163,7 @@ def main():
     job_last_status = {}
 
     # Start up to -q jobs
-    while to_submit and len(running_jobs) < args.q:
+    while to_submit and len(running_jobs) < cfg['max_queue']:
         script = to_submit.pop(0)
         jobid, err = submit_job(script)
         if jobid:
