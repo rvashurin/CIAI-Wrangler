@@ -115,6 +115,31 @@ def check_job_status(jobid):
     # If not in squeue, assume it's completed (status unknown)
     return "completed"
 
+def count_external_running(our_jobids: set) -> int:
+    """
+    Returns the number of RUNNING or PENDING jobs for the current user that
+    were not submitted by this wrangler session. Uses `squeue --me` to scope
+    to the current user without needing explicit user lookup.
+    """
+    try:
+        res = subprocess.run([
+            "squeue", "--me", "-h", "-o", "%i %T"
+        ], capture_output=True, text=True)
+        if res.returncode != 0:
+            return 0
+        count = 0
+        for line in res.stdout.splitlines():
+            parts = line.strip().split()
+            if not parts:
+                continue
+            jobid = parts[0]
+            state = parts[1].upper() if len(parts) > 1 else ""
+            if state in ("RUNNING", "PENDING") and jobid not in our_jobids:
+                count += 1
+        return count
+    except Exception:
+        return 0
+
 def cluster_health_check(log):
     import shutil
     #required_cmds = ["sbatch", "squeue", "sacct"]
@@ -162,8 +187,16 @@ def main():
     jobid_to_script = {}
     job_last_status = {}
 
-    # Start up to -q jobs
-    while to_submit and len(running_jobs) < cfg['max_queue']:
+    # Initial capacity-aware submission considering existing running jobs
+    prev_external_running = None
+    prev_allowed_capacity = None
+    external_running = count_external_running(set(jobid_to_script.keys()))
+    allowed_capacity = max(0, cfg['max_queue'] - external_running)
+    prev_external_running = external_running
+    prev_allowed_capacity = allowed_capacity
+    log.log(f"External running jobs: {external_running}; allowed capacity: {allowed_capacity}")
+
+    while to_submit and len(running_jobs) < allowed_capacity:
         script = to_submit.pop(0)
         jobid, err = submit_job(script)
         if jobid:
@@ -192,21 +225,33 @@ def main():
                 log.log(f"Job {script} with ID {jobid} {status}")
                 finished_jobs.add(jobid)
                 job_last_status[jobid] = status
-                # Start next if any remain
-                if to_submit:
-                    next_script = to_submit.pop(0)
-                    next_jobid, err = submit_job(next_script)
-                    if next_jobid:
-                        jobid_to_script[next_jobid] = next_script
-                        log.log(f"Job {next_script} started with ID {next_jobid} (queued)")
-                        still_running.append((next_jobid, next_script))
-                        job_last_status[next_jobid] = "queued"
-                    else:
-                        log.log(f"Job {next_script} failed to submit: {err}")
+                # Remove from our tracked jobids to avoid counting it as ours
+                if jobid in jobid_to_script:
+                    del jobid_to_script[jobid]
             else:
                 # If status is None, recheck later
                 still_running.append((jobid, script))
         running_jobs = still_running
+
+        # Recompute capacity based on current external running jobs
+        external_running = count_external_running(set(jobid_to_script.keys()))
+        allowed_capacity = max(0, cfg['max_queue'] - external_running)
+        if external_running != prev_external_running or allowed_capacity != prev_allowed_capacity:
+            log.log(f"External running jobs: {external_running}; allowed capacity: {allowed_capacity}")
+            prev_external_running = external_running
+            prev_allowed_capacity = allowed_capacity
+
+        # Top up submissions to fill allowed capacity
+        while to_submit and len(running_jobs) < allowed_capacity:
+            next_script = to_submit.pop(0)
+            next_jobid, err = submit_job(next_script)
+            if next_jobid:
+                jobid_to_script[next_jobid] = next_script
+                log.log(f"Job {next_script} started with ID {next_jobid} (queued)")
+                running_jobs.append((next_jobid, next_script))
+                job_last_status[next_jobid] = "queued"
+            else:
+                log.log(f"Job {next_script} failed to submit: {err}")
 
     log.close()
 

@@ -7,7 +7,8 @@ CIAI-Wrangler is a simple Python CLI tool to orchestrate and monitor the submiss
 
 ## Features
 - Submits jobs from a YAML config list, limiting the maximum number of concurrent jobs (`max_queue`)
-- Automatically starts new jobs as others complete
+- Respects your existing queue: checks `squeue --me` and only uses remaining capacity (`max_queue - external_in_flight`), where external_in_flight counts RUNNING and PENDING jobs
+- Automatically starts new jobs as others complete and as external jobs finish to fully utilize capacity
 - Polls job status every 5 seconds
 - Logs status (to stdout and optionally a file): job script, job ID, and real-time state
 
@@ -99,6 +100,7 @@ The log shows job script, job ID, and status, each time it changes, with a times
 
 ## Notes
 - Requires working `sbatch` and `squeue` commands in your environment.
+- Uses `squeue --me` to identify your currently RUNNING and PENDING jobs and adjusts submissions accordingly.
 - Only Slurm job scripts (`.sh` files, typically) should be listed in `jobs`.
 - **Important:** Prefer absolute paths to scripts. This avoids issues with changing working directories or running the tool from different locations.
 - If a job fails to submit, this will also be logged.
