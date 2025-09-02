@@ -6,8 +6,8 @@ CIAI-Wrangler is a simple Python CLI tool to orchestrate and monitor the submiss
 > This is an experimental tool for orchestrating SLURM jobs. Use at your own risk—no guarantees! If your job pipeline fails hours before your paper deadline, please don't @ me.
 
 ## Features
-- Submits jobs from a YAML config list, limiting the maximum number of concurrent jobs (`max_queue`)
-- Respects your existing queue: checks `squeue --me` and only uses remaining capacity (`max_queue - external_in_flight`), where external_in_flight counts RUNNING and PENDING jobs
+- Submits jobs from a YAML config list
+- Enforces two limits: `max_queue` (our in‑flight limit) and `cluster_capacity` (total capacity respected by subtracting external RUNNING+PENDING jobs via `squeue --me`)
 - Automatically starts new jobs as others complete and as external jobs finish to fully utilize capacity
 - Polls job status every 5 seconds
 - Logs status (to stdout and optionally a file): job script, job ID, and real-time state
@@ -49,7 +49,8 @@ YAML schema:
 jobs:
   - /absolute/path/to/mysim1.sh
   - /absolute/path/to/mysim2.sh
-max_queue: 3        # optional, default 3
+cluster_capacity: 3  # optional; default = max_queue
+max_queue: 2         # optional; default 3
 log_file: runlog.txt  # optional, default: none (stdout only)
 ```
 
@@ -62,6 +63,7 @@ jobs:
   - /absolute/path/to/mysim2.sh
   - /absolute/path/to/mysim3.sh
   - /absolute/path/to/mysim4.sh
+cluster_capacity: 3
 max_queue: 2
 log_file: runlog.txt
 ```
@@ -101,6 +103,7 @@ The log shows job script, job ID, and status, each time it changes, with a times
 ## Notes
 - Requires working `sbatch` and `squeue` commands in your environment.
 - Uses `squeue --me` to identify your currently RUNNING and PENDING jobs and adjusts submissions accordingly.
+- If `cluster_capacity` is omitted, it defaults to `max_queue` (backwards-compatible behavior).
 - Only Slurm job scripts (`.sh` files, typically) should be listed in `jobs`.
 - **Important:** Prefer absolute paths to scripts. This avoids issues with changing working directories or running the tool from different locations.
 - If a job fails to submit, this will also be logged.

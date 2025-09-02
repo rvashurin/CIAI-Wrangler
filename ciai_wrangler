@@ -67,6 +67,9 @@ def load_config(path: str) -> Dict[str, Any]:
     max_queue = data.get('max_queue', 3)
     if not isinstance(max_queue, int) or max_queue <= 0:
         errors.append("Config error: 'max_queue' must be a positive integer.")
+    cluster_capacity = data.get('cluster_capacity', max_queue)
+    if not isinstance(cluster_capacity, int) or cluster_capacity <= 0:
+        errors.append("Config error: 'cluster_capacity' must be a positive integer.")
     log_file = data.get('log_file', None)
     if log_file is not None and not isinstance(log_file, str):
         errors.append("Config error: 'log_file' must be a string or null.")
@@ -79,6 +82,7 @@ def load_config(path: str) -> Dict[str, Any]:
     return {
         'jobs': [str(j).strip() for j in jobs],
         'max_queue': int(max_queue),
+        'cluster_capacity': int(cluster_capacity),
         'log_file': log_file,
     }
 
@@ -190,13 +194,14 @@ def main():
     # Initial capacity-aware submission considering existing running jobs
     prev_external_running = None
     prev_allowed_capacity = None
-    external_running = count_external_running(set(jobid_to_script.keys()))
-    allowed_capacity = max(0, cfg['max_queue'] - external_running)
-    prev_external_running = external_running
-    prev_allowed_capacity = allowed_capacity
-    log.log(f"External running jobs: {external_running}; allowed capacity: {allowed_capacity}")
+    external_inflight = count_external_running(set(jobid_to_script.keys()))
+    # Our allowed total in-flight = min(max_queue, cluster_capacity - external_inflight)
+    allowed_total = min(cfg['max_queue'], max(0, cfg['cluster_capacity'] - external_inflight))
+    prev_external_running = external_inflight
+    prev_allowed_capacity = allowed_total
+    log.log(f"External jobs (RUNNING+PENDING): {external_inflight}; our allowed in-flight: {allowed_total}")
 
-    while to_submit and len(running_jobs) < allowed_capacity:
+    while to_submit and len(running_jobs) < allowed_total:
         script = to_submit.pop(0)
         jobid, err = submit_job(script)
         if jobid:
@@ -234,15 +239,15 @@ def main():
         running_jobs = still_running
 
         # Recompute capacity based on current external running jobs
-        external_running = count_external_running(set(jobid_to_script.keys()))
-        allowed_capacity = max(0, cfg['max_queue'] - external_running)
-        if external_running != prev_external_running or allowed_capacity != prev_allowed_capacity:
-            log.log(f"External running jobs: {external_running}; allowed capacity: {allowed_capacity}")
-            prev_external_running = external_running
-            prev_allowed_capacity = allowed_capacity
+        external_inflight = count_external_running(set(jobid_to_script.keys()))
+        allowed_total = min(cfg['max_queue'], max(0, cfg['cluster_capacity'] - external_inflight))
+        if external_inflight != prev_external_running or allowed_total != prev_allowed_capacity:
+            log.log(f"External jobs (RUNNING+PENDING): {external_inflight}; our allowed in-flight: {allowed_total}")
+            prev_external_running = external_inflight
+            prev_allowed_capacity = allowed_total
 
         # Top up submissions to fill allowed capacity
-        while to_submit and len(running_jobs) < allowed_capacity:
+        while to_submit and len(running_jobs) < allowed_total:
             next_script = to_submit.pop(0)
             next_jobid, err = submit_job(next_script)
             if next_jobid:
